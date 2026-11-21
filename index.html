@@ -507,9 +507,10 @@
     var mount = $('#q2bm-yt');
     if (reduce || !CFG.YT_ID || !mount) return;
 
+    var player = null;
     function create() {
       try {
-        new window.YT.Player(mount, {
+        player = new window.YT.Player(mount, {
           videoId: CFG.YT_ID,
           host: 'https://www.youtube-nocookie.com',
           playerVars: {
@@ -522,10 +523,32 @@
             onStateChange: function (e) {
               if (e.data === 1) root.classList.add('q2bm--video-on');
               if (e.data === 0) { e.target.seekTo(CFG.YT_START || 0); e.target.playVideo(); }
-            }
+            },
+            onAutoplayBlocked: function () { armGesture(); }
           }
         });
+        // fallback: alguns navegadores não disparam onAutoplayBlocked
+        setTimeout(function () {
+          try { if (player && player.getPlayerState && player.getPlayerState() !== 1) armGesture(); } catch (x) {}
+        }, 3500);
       } catch (err) { /* mantém o poster */ }
+    }
+
+    // Se o autoplay for bloqueado, tenta tocar de novo na primeira interação do usuário
+    var armed = false;
+    function armGesture() {
+      if (armed) return;
+      armed = true;
+      var retry = function () {
+        try { if (player && player.playVideo) { player.mute(); player.playVideo(); } } catch (x) {}
+        ['pointerdown', 'keydown', 'touchstart', 'scroll'].forEach(function (ev) {
+          window.removeEventListener(ev, retry, opts);
+        });
+      };
+      var opts = { passive: true, once: false };
+      ['pointerdown', 'keydown', 'touchstart', 'scroll'].forEach(function (ev) {
+        window.addEventListener(ev, retry, opts);
+      });
     }
 
     if (window.YT && window.YT.Player) { create(); return; }
